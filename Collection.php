@@ -1831,7 +1831,7 @@ class Collection implements ArrayAccess, CanBeEscapedWhenCastToString, Enumerabl
      *
      * @return TValue
      */
-    public function offsetGet($key): mixed
+    public function offsetGet($key)
     {
         return $this->items[$key];
     }
