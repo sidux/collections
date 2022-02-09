@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Accessor;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 
@@ -75,6 +76,8 @@ if (! function_exists('data_get')) {
                 $target = $target[$segment];
             } elseif (is_object($target) && isset($target->{$segment})) {
                 $target = $target->{$segment};
+            } elseif (is_object($target)) {
+                $target = Accessor::get($target, $segment);
             } else {
                 return value($default);
             }
@@ -130,7 +133,7 @@ if (! function_exists('data_set')) {
 
                 data_set($target->{$segment}, $segments, $value, $overwrite);
             } elseif ($overwrite || ! isset($target->{$segment})) {
-                $target->{$segment} = $value;
+                Accessor::set($target, $segment, $value);
             }
         } else {
             $target = [];
