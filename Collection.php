@@ -1864,4 +1864,26 @@ class Collection implements ArrayAccess, CanBeEscapedWhenCastToString, Enumerabl
     {
         unset($this->items[$key]);
     }
+
+    /**
+     * @param string|array<mixed>|int|null $value
+     *
+     * @return static<TKey, mixed>
+     */
+    public function select($value, ?string $index = null): self
+    {
+        return $this->pluck($value, $index);
+    }
+
+    /**
+     * @param iterable<array-key, TValue> $items
+     *
+     * @return static<TKey, TValue>
+     */
+    public function compare(iterable $items): self
+    {
+        return $this->diff($items)
+                    ->merge(collect($items)->diff($this))
+        ;
+    }
 }

@@ -1002,43 +1002,75 @@ trait EnumeratesValues
      * @param  mixed  $value
      * @return \Closure
      */
-    protected function operatorForWhere($key, $operator = null, $value = null)
-    {
-        if (func_num_args() === 1) {
+    protected function operatorForWhere(
+        $key,
+        $operator = null,
+        $value = null
+    ): callable {
+        if (1 === \func_num_args()) {
             $value = true;
 
             $operator = '=';
         }
 
-        if (func_num_args() === 2) {
+        if (2 === \func_num_args()) {
             $value = $operator;
 
             $operator = '=';
         }
 
-        return function ($item) use ($key, $operator, $value) {
+        return static function ($item) use ($key, $operator, $value) {
             $retrieved = data_get($item, $key);
 
-            $strings = array_filter([$retrieved, $value], function ($value) {
-                return is_string($value) || (is_object($value) && method_exists($value, '__toString'));
-            });
+            $strings = array_filter([$retrieved, $value],
+                static function ($value) {
+                    return \is_string($value) || (\is_object(
+                                $value
+                            ) && method_exists($value, '__toString'));
+                });
 
-            if (count($strings) < 2 && count(array_filter([$retrieved, $value], 'is_object')) == 1) {
-                return in_array($operator, ['!=', '<>', '!==']);
+            if (\count($strings) < 2 && 1 === \count(
+                    array_filter([$retrieved, $value], 'is_object')
+                )) {
+                return \in_array($operator, ['!=', '<>', '!=='], true);
             }
 
             switch ($operator) {
                 default:
                 case '=':
-                case '==':  return $retrieved == $value;
+                case '==':
+                case '===':
+                    return $retrieved === $value;
                 case '!=':
-                case '<>':  return $retrieved != $value;
-                case '<':   return $retrieved < $value;
-                case '>':   return $retrieved > $value;
-                case '<=':  return $retrieved <= $value;
-                case '>=':  return $retrieved >= $value;
-                case '===': return $retrieved === $value;
-                case '!==': return $retrieved !== $value;
+                case '<>':
+                case '!==':
+                    return $retrieved !== $value;
+                case '<':
+                    return $retrieved < $value;
+                case '>':
+                    return $retrieved > $value;
+                case '<=':
+                    return $retrieved <= $value;
+                case '>=':
+                    return $retrieved >= $value;
+                case 'contains':
+                    return (\is_array($retrieved) && \in_array(
+                                $value,
+                                $retrieved,
+                                true
+                            ))
+                        || (\is_string($retrieved) && str_contains(
+                                $retrieved,
+                                (string) $value
+                            ));
+                case 'includes':
+                    return (\is_array($retrieved) && 0 === \count(
+                                array_diff((array) $value, $retrieved)
+                            ))
+                        || (\is_string($retrieved) && str_contains(
+                                $retrieved,
+                                (string) $value
+                            ));
             }
         };
     }
