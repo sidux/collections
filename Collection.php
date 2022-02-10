@@ -1076,16 +1076,12 @@ class Collection implements ArrayAccess, CanBeEscapedWhenCastToString, Enumerabl
      *
      * @param int|null $number
      *
-     * @return static<int, TValue>|TValue
+     * @return static<int, TValue>
      *
      * @throws \InvalidArgumentException
      */
     public function random($number = null)
     {
-        if (is_null($number)) {
-            return Arr::random($this->items);
-        }
-
         return new static(Arr::random($this->items, $number));
     }
 
