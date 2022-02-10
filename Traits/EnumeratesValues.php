@@ -11,6 +11,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Enumerable;
 use Illuminate\Support\HigherOrderCollectionProxy;
+use Illuminate\Support\HigherOrderWhenProxy;
 use JsonSerializable;
 use Symfony\Component\VarDumper\VarDumper;
 use Traversable;
@@ -222,7 +223,7 @@ trait EnumeratesValues
      * Dump the items and end the script.
      *
      * @param  mixed  ...$args
-     * @return never
+     * @return void
      */
     public function dd(...$args)
     {
@@ -486,6 +487,29 @@ trait EnumeratesValues
     }
 
     /**
+     * Apply the callback if the value is truthy.
+     *
+     * @param  bool|mixed  $value
+     * @param  callable|null  $callback
+     * @param  callable|null  $default
+     * @return static|mixed
+     */
+    public function when($value, callable $callback = null, callable $default = null)
+    {
+        if (! $callback) {
+            return new HigherOrderWhenProxy($this, $value);
+        }
+
+        if ($value) {
+            return $callback($this, $value);
+        } elseif ($default) {
+            return $default($this, $value);
+        }
+
+        return $this;
+    }
+
+    /**
      * Apply the callback if the collection is empty.
      *
      * @template TWhenEmptyReturnType
@@ -511,6 +535,19 @@ trait EnumeratesValues
     public function whenNotEmpty(callable $callback, callable $default = null)
     {
         return $this->when($this->isNotEmpty(), $callback, $default);
+    }
+
+    /**
+     * Apply the callback if the value is falsy.
+     *
+     * @param  bool  $value
+     * @param  callable  $callback
+     * @param  callable|null  $default
+     * @return static|mixed
+     */
+    public function unless($value, callable $callback, callable $default = null)
+    {
+        return $this->when(! $value, $callback, $default);
     }
 
     /**
@@ -711,7 +748,7 @@ trait EnumeratesValues
     /**
      * Pass the collection into a new class.
      *
-     * @param  string-class  $class
+     * @param  class-string  $class
      * @return mixed
      */
     public function pipeInto($class)
@@ -733,6 +770,19 @@ trait EnumeratesValues
             },
             $this,
         );
+    }
+
+    /**
+     * Pass the collection to the given callback and then return it.
+     *
+     * @param  callable  $callback
+     * @return $this
+     */
+    public function tap(callable $callback)
+    {
+        $callback(clone $this);
+
+        return $this;
     }
 
     /**
@@ -763,6 +813,22 @@ trait EnumeratesValues
      * @param  mixed  ...$initial
      * @return array
      *
+     * @deprecated Use "reduceSpread" instead
+     *
+     * @throws \UnexpectedValueException
+     */
+    public function reduceMany(callable $callback, ...$initial)
+    {
+        return $this->reduceSpread($callback, ...$initial);
+    }
+
+    /**
+     * Reduce the collection to multiple aggregate values.
+     *
+     * @param  callable  $callback
+     * @param  mixed  ...$initial
+     * @return array
+     *
      * @throws \UnexpectedValueException
      */
     public function reduceSpread(callable $callback, ...$initial)
@@ -784,6 +850,18 @@ trait EnumeratesValues
     }
 
     /**
+     * Reduce an associative collection to a single value.
+     *
+     * @param  callable  $callback
+     * @param  mixed  $initial
+     * @return mixed
+     */
+    public function reduceWithKeys(callable $callback, $initial = null)
+    {
+        return $this->reduce($callback, $initial);
+    }
+
+    /**
      * Create a collection of all elements that do not pass a given truth test.
      *
      * @param  (callable(TValue, TKey): bool)|bool  $callback
@@ -797,41 +875,6 @@ trait EnumeratesValues
             return $useAsCallable
                 ? ! $callback($value, $key)
                 : $value != $callback;
-        });
-    }
-
-    /**
-     * Pass the collection to the given callback and then return it.
-     *
-     * @param  callable($this): mixed  $callback
-     * @return $this
-     */
-    public function tap(callable $callback)
-    {
-        $callback($this);
-
-        return $this;
-    }
-
-    /**
-     * Return only unique items from the collection array.
-     *
-     * @param  (callable(TValue, TKey): bool)|string|null  $key
-     * @param  bool  $strict
-     * @return static
-     */
-    public function unique($key = null, $strict = false)
-    {
-        $callback = $this->valueRetriever($key);
-
-        $exists = [];
-
-        return $this->reject(function ($item, $key) use ($callback, $strict, &$exists) {
-            if (in_array($id = $callback($item, $key), $exists, $strict)) {
-                return true;
-            }
-
-            $exists[] = $id;
         });
     }
 
@@ -859,7 +902,7 @@ trait EnumeratesValues
     /**
      * Get the collection of items as a plain array.
      *
-     * @return array<TKey, mixed>
+     * @return array<TKey, TValue>
      */
     public function toArray()
     {
@@ -1004,35 +1047,64 @@ trait EnumeratesValues
             $operator = '=';
         }
 
-        if (func_num_args() === 2) {
+        if (2 === \func_num_args()) {
             $value = $operator;
 
             $operator = '=';
         }
 
-        return function ($item) use ($key, $operator, $value) {
+        return static function ($item) use ($key, $operator, $value) {
             $retrieved = data_get($item, $key);
 
-            $strings = array_filter([$retrieved, $value], function ($value) {
-                return is_string($value) || (is_object($value) && method_exists($value, '__toString'));
-            });
+            $strings = array_filter([$retrieved, $value],
+                static function ($value) {
+                    return \is_string($value) || (\is_object(
+                                $value
+                            ) && method_exists($value, '__toString'));
+                });
 
-            if (count($strings) < 2 && count(array_filter([$retrieved, $value], 'is_object')) == 1) {
-                return in_array($operator, ['!=', '<>', '!==']);
+            if (\count($strings) < 2 && 1 === \count(
+                    array_filter([$retrieved, $value], 'is_object')
+                )) {
+                return \in_array($operator, ['!=', '<>', '!=='], true);
             }
 
             switch ($operator) {
                 default:
                 case '=':
-                case '==':  return $retrieved == $value;
+                case '==':
+                case '===':
+                    return $retrieved === $value;
                 case '!=':
-                case '<>':  return $retrieved != $value;
-                case '<':   return $retrieved < $value;
-                case '>':   return $retrieved > $value;
-                case '<=':  return $retrieved <= $value;
-                case '>=':  return $retrieved >= $value;
-                case '===': return $retrieved === $value;
-                case '!==': return $retrieved !== $value;
+                case '<>':
+                case '!==':
+                    return $retrieved !== $value;
+                case '<':
+                    return $retrieved < $value;
+                case '>':
+                    return $retrieved > $value;
+                case '<=':
+                    return $retrieved <= $value;
+                case '>=':
+                    return $retrieved >= $value;
+                case 'contains':
+                    return (\is_array($retrieved) && \in_array(
+                                $value,
+                                $retrieved,
+                                true
+                            ))
+                        || (\is_string($retrieved) && str_contains(
+                                $retrieved,
+                                (string) $value
+                            ));
+                case 'includes':
+                    return (\is_array($retrieved) && 0 === \count(
+                                array_diff((array) $value, $retrieved)
+                            ))
+                        || (\is_string($retrieved) && str_contains(
+                                $retrieved,
+                                (string) $value
+                            ));
             }
         };
     }
